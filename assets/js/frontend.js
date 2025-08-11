@@ -46,7 +46,29 @@
         
         endSession: function(e) {
             e.preventDefault();
-            alert('End session functionality coming soon!');
+            
+            // Simple prompt for ending bankroll
+            const endingBankroll = prompt('Enter your ending bankroll ($):');
+            
+            if (endingBankroll === null) {
+                return; // User cancelled
+            }
+            
+            const amount = parseFloat(endingBankroll);
+            if (isNaN(amount) || amount < 0) {
+                alert('Please enter a valid amount.');
+                return;
+            }
+            
+            const notes = prompt('Session notes (optional):') || '';
+            
+            // Submit form to end session
+            $('<form method="post">')
+                .append($('<input type="hidden" name="end_session" value="1">'))
+                .append($('<input type="hidden" name="ending_bankroll">').val(amount))
+                .append($('<input type="hidden" name="notes">').val(notes))
+                .appendTo('body')
+                .submit();
         },
         
         logBet: function(e) {

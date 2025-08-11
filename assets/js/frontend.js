@@ -17,13 +17,11 @@
         },
         
         bindEvents: function() {
-            // Session controls - only bind if elements exist
-            $(document).on('click', '#bct-start-session', this.startSession.bind(this));
-            $(document).on('click', '#bct-end-session', this.endSession.bind(this));
-            $(document).on('submit', '#bct-log-bet-form', this.logBet.bind(this));
-            
-            // Navigation tabs - only if they exist
-            $(document).on('click', '.bct-nav-tab', this.switchTab.bind(this));
+            // Use event delegation to avoid double binding
+            $(document).off('click.bct').on('click.bct', '#bct-start-session', this.startSession.bind(this));
+            $(document).off('click.bct').on('click.bct', '#bct-end-session', this.endSession.bind(this));
+            $(document).off('submit.bct').on('submit.bct', '#bct-log-bet-form', this.logBet.bind(this));
+            $(document).off('click.bct').on('click.bct', '.bct-nav-tab', this.switchTab.bind(this));
         },
         
         startSession: function(e) {
@@ -36,7 +34,7 @@
                 return;
             }
             
-            // Simple form submission for now
+            // Simple form submission
             $('<form method="post">')
                 .append($('<input type="hidden" name="start_session" value="1">'))
                 .append($('<input type="hidden" name="starting_bankroll">').val(startingBankroll))
@@ -47,7 +45,7 @@
         endSession: function(e) {
             e.preventDefault();
             
-            // Simple prompt for ending bankroll
+            // Single prompt for ending bankroll
             const endingBankroll = prompt('Enter your ending bankroll ($):');
             
             if (endingBankroll === null) {
@@ -94,12 +92,10 @@
         },
         
         loadUserData: function() {
-            // Basic data loading - will expand later
             console.log('Loading user data...');
         },
         
         checkActiveSession: function() {
-            // Check for active session - will expand later
             console.log('Checking active session...');
         }
     };

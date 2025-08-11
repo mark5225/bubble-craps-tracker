@@ -30,7 +30,7 @@ class BCT_Frontend {
     public function enqueue_scripts() {
         if ($this->is_tracker_page()) {
             wp_enqueue_style('bct-frontend', BCT_PLUGIN_URL . 'assets/css/frontend.css', array(), BCT_VERSION);
-            wp_enqueue_script('bct-frontend', BCT_PLUGIN_URL . 'assets/js/frontend.js', array('jquery'), BCT_VERSION, true);
+            wp_enqueue_script('bct-frontend', BCT_PLUGIN_URL . 'assets/js/frontend.js', array('jquery'), '1.0.1', true);
             
             wp_localize_script('bct-frontend', 'bct_frontend', array(
                 'ajax_url' => admin_url('admin-ajax.php'),

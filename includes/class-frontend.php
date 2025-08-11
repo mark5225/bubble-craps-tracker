@@ -247,4 +247,126 @@ class BCT_Frontend {
                     SUM(CASE WHEN session_status = 'completed' THEN net_result ELSE 0 END) as total_net_result,
                     AVG(CASE WHEN session_status = 'completed' THEN net_result ELSE NULL END) as avg_session_result
                 FROM {$wpdb->prefix}craps_sessions 
-                WHERE user_id = %
+                WHERE user_id = %d
+            ", $user_id));
+            ?>
+            
+            <div class="bct-stats-grid">
+                <div class="bct-stat-card">
+                    <div class="bct-stat-label"><?php _e('Total Sessions', 'bubble-craps-tracker'); ?></div>
+                    <div class="bct-stat-number"><?php echo $stats->total_sessions ?: 0; ?></div>
+                </div>
+                <div class="bct-stat-card">
+                    <div class="bct-stat-label"><?php _e('Completed Sessions', 'bubble-craps-tracker'); ?></div>
+                    <div class="bct-stat-number"><?php echo $stats->completed_sessions ?: 0; ?></div>
+                </div>
+                <div class="bct-stat-card">
+                    <div class="bct-stat-label"><?php _e('Net Winnings', 'bubble-craps-tracker'); ?></div>
+                    <div class="bct-stat-number" style="color: <?php echo ($stats->total_net_result >= 0) ? '#28a745' : '#C51F1F'; ?>;">
+                        <?php echo ($stats->total_net_result >= 0 ? '+' : '') . '$' . number_format($stats->total_net_result ?: 0, 2); ?>
+                    </div>
+                </div>
+                <div class="bct-stat-card">
+                    <div class="bct-stat-label"><?php _e('Average Session', 'bubble-craps-tracker'); ?></div>
+                    <div class="bct-stat-number">
+                        <?php echo ($stats->avg_session_result >= 0 ? '+' : '') . '$' . number_format($stats->avg_session_result ?: 0, 2); ?>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bct-card">
+                <h2><?php _e('Start New Session', 'bubble-craps-tracker'); ?></h2>
+                <form method="post">
+                    <label for="starting_bankroll"><?php _e('Starting Bankroll ($):', 'bubble-craps-tracker'); ?></label>
+                    <input type="number" id="starting_bankroll" name="starting_bankroll" 
+                           class="bct-input" placeholder="100.00" min="1" step="0.01" required>
+                    <button type="submit" name="start_session" class="bct-btn">
+                        <?php _e('Start Session', 'bubble-craps-tracker'); ?>
+                    </button>
+                </form>
+            </div>
+            
+            <div class="bct-card">
+                <h2><?php _e('Recent Sessions', 'bubble-craps-tracker'); ?></h2>
+                <?php
+                $sessions = $wpdb->get_results($wpdb->prepare("
+                    SELECT * FROM {$wpdb->prefix}craps_sessions 
+                    WHERE user_id = %d 
+                    ORDER BY session_start DESC 
+                    LIMIT 10
+                ", $user_id));
+                
+                if ($sessions): ?>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #1D3557;">
+                                <th style="padding: 10px; text-align: left;"><?php _e('Date', 'bubble-craps-tracker'); ?></th>
+                                <th style="padding: 10px; text-align: left;"><?php _e('Starting Bankroll', 'bubble-craps-tracker'); ?></th>
+                                <th style="padding: 10px; text-align: left;"><?php _e('Ending Bankroll', 'bubble-craps-tracker'); ?></th>
+                                <th style="padding: 10px; text-align: left;"><?php _e('Result', 'bubble-craps-tracker'); ?></th>
+                                <th style="padding: 10px; text-align: left;"><?php _e('Status', 'bubble-craps-tracker'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($sessions as $session): ?>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                    <td style="padding: 10px;">
+                                        <?php echo date('M j, Y g:i A', strtotime($session->session_start)); ?>
+                                    </td>
+                                    <td style="padding: 10px;">
+                                        $<?php echo number_format($session->starting_bankroll, 2); ?>
+                                    </td>
+                                    <td style="padding: 10px;">
+                                        <?php echo $session->ending_bankroll ? '$' . number_format($session->ending_bankroll, 2) : '-'; ?>
+                                    </td>
+                                    <td style="padding: 10px;">
+                                        <?php if ($session->session_status === 'completed' && $session->net_result !== null): ?>
+                                            <span style="color: <?php echo $session->net_result >= 0 ? '#28a745' : '#C51F1F'; ?>; font-weight: bold;">
+                                                <?php echo ($session->net_result >= 0 ? '+' : '') . '$' . number_format($session->net_result, 2); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            -
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="padding: 10px;">
+                                        <span style="background: <?php echo $session->session_status === 'active' ? '#28a745' : '#6c757d'; ?>; 
+                                                     color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">
+                                            <?php echo ucfirst($session->session_status); ?>
+                                        </span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php else: ?>
+                    <p><?php _e('No sessions yet. Start your first session above!', 'bubble-craps-tracker'); ?></p>
+                <?php endif; ?>
+            </div>
+            
+            <div class="bct-card">
+                <h2><?php _e('Quick Actions', 'bubble-craps-tracker'); ?></h2>
+                <p><?php _e('Advanced features like bet logging, analytics, and community features will be available soon!', 'bubble-craps-tracker'); ?></p>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                    <button class="bct-btn" style="opacity: 0.6;" disabled>
+                        <?php _e('Log Bet', 'bubble-craps-tracker'); ?>
+                    </button>
+                    <button class="bct-btn" style="opacity: 0.6;" disabled>
+                        <?php _e('View Analytics', 'bubble-craps-tracker'); ?>
+                    </button>
+                    <button class="bct-btn" style="opacity: 0.6;" disabled>
+                        <?php _e('Share Win Photo', 'bubble-craps-tracker'); ?>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+    
+    private function is_tracker_page() {
+        return get_query_var('craps_tracker_page') || 
+               has_shortcode(get_post()->post_content ?? '', 'craps_tracker') || 
+               has_shortcode(get_post()->post_content ?? '', 'craps_dashboard');
+    }
+}
+?>

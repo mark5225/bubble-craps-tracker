@@ -236,6 +236,47 @@ class BCT_Frontend {
                 ?>
             <?php endif; ?>
             
+            <?php if (isset($_POST['end_session'])): ?>
+                <?php
+                global $wpdb;
+                $user_id = get_current_user_id();
+                
+                // Get active session
+                $active_session = $wpdb->get_row($wpdb->prepare("
+                    SELECT * FROM {$wpdb->prefix}craps_sessions 
+                    WHERE user_id = %d AND session_status = 'active'
+                ", $user_id));
+                
+                if ($active_session) {
+                    $ending_bankroll = floatval($_POST['ending_bankroll']);
+                    $notes = sanitize_textarea_field($_POST['notes']);
+                    $net_result = $ending_bankroll - $active_session->starting_bankroll;
+                    
+                    // Update session
+                    $wpdb->update(
+                        $wpdb->prefix . 'craps_sessions',
+                        array(
+                            'session_end' => current_time('mysql'),
+                            'ending_bankroll' => $ending_bankroll,
+                            'net_result' => $net_result,
+                            'session_status' => 'completed',
+                            'notes' => $notes
+                        ),
+                        array('id' => $active_session->id),
+                        array('%s', '%f', '%f', '%s', '%s'),
+                        array('%d')
+                    );
+                    
+                    $result_color = $net_result >= 0 ? '#28a745' : '#C51F1F';
+                    $result_text = ($net_result >= 0 ? '+' : '') . '$' . number_format($net_result, 2);
+                    
+                    echo '<div class="bct-success">✅ Session ended! Result: <span style="color: ' . $result_color . '; font-weight: bold;">' . $result_text . '</span></div>';
+                } else {
+                    echo '<div class="bct-error">❌ No active session found.</div>';
+                }
+                ?>
+            <?php endif; ?>
+            
             <!-- User Stats -->
             <?php
             global $wpdb;

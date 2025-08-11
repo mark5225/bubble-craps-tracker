@@ -246,49 +246,84 @@ class BCT_Admin {
     }
     
     public function settings_page() {
-        ?>
-        <div class="wrap">
-            <h1><?php _e('Tracker Settings', 'bubble-craps-tracker'); ?></h1>
-            <form method="post" action="options.php">
-                <?php
-                settings_fields('bct_settings');
-                do_settings_sections('bct_settings');
-                ?>
-                <table class="form-table">
-                    <tr>
-                        <th scope="row"><?php _e('Plugin Status', 'bubble-craps-tracker'); ?></th>
-                        <td>
-                            <span style="color: green; font-weight: bold;">✅ Active</span>
-                            <p class="description"><?php _e('The plugin is active and ready to use.', 'bubble-craps-tracker'); ?></p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><?php _e('Database Tables', 'bubble-craps-tracker'); ?></th>
-                        <td>
-                            <?php
-                            global $wpdb;
-                            $tables = array(
-                                'craps_sessions',
-                                'craps_session_bets',
-                                'craps_user_achievements',
-                                'craps_user_feedback',
-                                'craps_win_photos'
-                            );
-                            
-                            foreach ($tables as $table) {
-                                $full_table_name = $wpdb->prefix . $table;
-                                $exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'") === $full_table_name;
-                                echo '<p>' . ($exists ? '✅' : '❌') . ' ' . $full_table_name . '</p>';
-                            }
-                            ?>
-                        </td>
-                    </tr>
-                </table>
-                <?php submit_button(); ?>
-            </form>
-        </div>
-        <?php
+    // Handle manual table creation
+    if (isset($_POST['create_tables']) && $_POST['create_tables'] === '1') {
+        BCT_Database::create_tables();
+        echo '<div class="notice notice-success"><p><strong>Tables created successfully!</strong> Please refresh this page to see the updated status.</p></div>';
     }
+    
+    ?>
+    <div class="wrap">
+        <h1><?php _e('Tracker Settings', 'bubble-craps-tracker'); ?></h1>
+        
+        <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3><?php _e('Database Tables', 'bubble-craps-tracker'); ?></h3>
+            <?php
+            global $wpdb;
+            $tables = array(
+                'craps_sessions',
+                'craps_session_bets',
+                'craps_user_achievements',
+                'craps_user_feedback',
+                'craps_win_photos'
+            );
+            
+            $all_exist = true;
+            foreach ($tables as $table) {
+                $full_table_name = $wpdb->prefix . $table;
+                $exists = $wpdb->get_var("SHOW TABLES LIKE '$full_table_name'") === $full_table_name;
+                echo '<p>' . ($exists ? '✅' : '❌') . ' ' . $full_table_name . '</p>';
+                if (!$exists) {
+                    $all_exist = false;
+                }
+            }
+            
+            if (!$all_exist) {
+                echo '<form method="post" style="margin-top: 20px;">';
+                echo '<input type="hidden" name="create_tables" value="1">';
+                echo '<button type="submit" class="button button-primary">🔧 Create Missing Tables</button>';
+                echo '</form>';
+            } else {
+                echo '<p style="color: green; font-weight: bold;">✅ All tables exist!</p>';
+            }
+            ?>
+        </div>
+        
+        <form method="post" action="options.php">
+            <?php
+            settings_fields('bct_settings');
+            do_settings_sections('bct_settings');
+            ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('Plugin Status', 'bubble-craps-tracker'); ?></th>
+                    <td>
+                        <span style="color: green; font-weight: bold;">✅ Active</span>
+                        <p class="description"><?php _e('The plugin is active and ready to use.', 'bubble-craps-tracker'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Frontend URL', 'bubble-craps-tracker'); ?></th>
+                    <td>
+                        <a href="<?php echo home_url('/craps-tracker/'); ?>" target="_blank">
+                            <?php echo home_url('/craps-tracker/'); ?>
+                        </a>
+                        <p class="description"><?php _e('Direct link to the session tracker.', 'bubble-craps-tracker'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><?php _e('Shortcode', 'bubble-craps-tracker'); ?></th>
+                    <td>
+                        <code>[craps_tracker]</code>
+                        <p class="description"><?php _e('Use this shortcode on any page or post.', 'bubble-craps-tracker'); ?></p>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button(); ?>
+        </form>
+    </div>
+    <?php
+}
     
     private function get_total_users() {
         global $wpdb;

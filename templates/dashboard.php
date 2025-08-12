@@ -107,6 +107,146 @@ if ($active_session && $active_session->casino_id) {
                 </div>
                 
                 <div class="bct-location-filter" id="bct-location-filter">
+                    <div class="bct-location-chip active" data-location="all">All States</div>
+                    <?php 
+                    $locations = bct_get_casino_locations();
+                    foreach (array_slice($locations, 0, 5) as $location): ?>
+                        <div class="bct-location-chip" data-location="<?php echo esc_attr($location['slug']); ?>">
+                            <?php echo esc_html($location['name']); ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                
+                <div class="bct-casino-list" id="bct-casino-list">
+                    <?php 
+                    $casinos = bct_get_casinos_for_session();
+                    if (!empty($casinos)): 
+                        foreach ($casinos as $casino): ?>
+                            <div class="bct-casino-item" 
+                                 data-casino-id="<?php echo $casino['id']; ?>" 
+                                 data-location="<?php echo esc_attr(strtolower($casino['location'])); ?>"
+                                 onclick="BCTracker.selectCasino(this)">
+                                <div class="bct-casino-info">
+                                    <h4><?php echo esc_html($casino['name']); ?></h4>
+                                    <div class="bct-casino-location"><?php echo esc_html($casino['location']); ?></div>
+                                </div>
+                                <div class="bct-casino-badges">
+                                    <?php if ($casino['has_bubble']): ?>
+                                        <span class="bct-badge bubble">Bubble Craps</span>
+                                    <?php endif; ?>
+                                    <?php if ($casino['has_tables']): ?>
+                                        <span class="bct-badge">Tables</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; 
+                    else: ?>
+                        <div class="bct-no-results">
+                            <p>No casinos found. <a href="https://www.bubble-craps.com/all-listings/add-listing/" target="_blank">Add a casino listing</a></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                
+                <div class="bct-add-casino">
+                    Don't see your casino? <a href="https://www.bubble-craps.com/all-listings/add-listing/" target="_blank">Add a new listing</a>
+                </div>
+            </div>
+            
+            <!-- Step 2: Starting Bankroll -->
+            <div class="bct-step">
+                <div class="bct-step-title">
+                    <span class="bct-step-number">2</span>
+                    Starting Bankroll
+                </div>
+                
+                <input type="number" 
+                       id="bct-starting-bankroll" 
+                       class="bct-bankroll-input" 
+                       placeholder="Enter amount (e.g., 250.00)" 
+                       min="1" 
+                       step="0.01"
+                       onkeypress="BCTracker.handleBankrollKeypress(event)">
+            </div>
+        </div>
+        
+        <div class="bct-modal-footer">
+            <button class="bct-btn bct-btn-secondary" onclick="BCTracker.closeModal()">
+                Cancel
+            </button>
+            <button class="bct-btn bct-btn-primary" 
+                    id="bct-start-session-btn" 
+                    onclick="BCTracker.startSessionFromModal()" 
+                    disabled>
+                Start Session
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="bct-container">
+    <!-- Header -->
+    <div class="bct-header">
+        <h1><?php printf(__('Welcome back, %s!', 'bubble-craps-tracker'), $current_user->display_name); ?></h1>
+        <p><?php _e('Track your craps sessions, analyze your performance, and compete with other players.', 'bubble-craps-tracker'); ?></p>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="bct-nav-tabs">
+        <button class="bct-nav-tab active" data-target="#bct-dashboard">
+            <?php _e('Dashboard', 'bubble-craps-tracker'); ?>
+        </button>
+        <button class="bct-nav-tab" data-target="#bct-analytics">
+            <?php _e('Analytics', 'bubble-craps-tracker'); ?>
+        </button>
+        <button class="bct-nav-tab" data-target="#bct-community">
+            <?php _e('Community', 'bubble-craps-tracker'); ?>
+        </button>
+        <button class="bct-nav-tab" data-target="#bct-achievements">
+            <?php _e('Achievements', 'bubble-craps-tracker'); ?>
+        </button>
+    </div>
+
+    <!-- Dashboard Tab Content -->
+    <div id="bct-dashboard" class="bct-tab-content">
+        
+        <!-- Session Tracker -->
+        <div class="bct-session-tracker <?php echo $active_session ? 'bct-session-active' : ''; ?>">
+            <?php if ($active_session): ?>
+                <!-- Active Session Display -->
+                <div id="bct-session-active">
+                    <h2><?php _e('Active Session', 'bubble-craps-tracker'); ?></h2>
+                    
+                    <?php if ($session_casino): ?>
+                        <div class="bct-session-casino">
+                            <span class="bct-casino-label"><?php _e('Playing at:', 'bubble-craps-tracker'); ?></span>
+                            <strong><?php echo esc_html($session_casino['name']); ?></strong>
+                            <span class="bct-casino-location"><?php echo esc_html($session_casino['location']); ?></span>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="bct-bankroll-display">
+                        <div><?php _e('Current Bankroll', 'bubble-craps-tracker'); ?></div>
+                        <div id="bct-current-bankroll">$<?php echo number_format($active_session->starting_bankroll, 2); ?></div>
+                        <div id="bct-net-result" class="bct-stat-positive">+$0.00</div>
+                    </div>
+                    <div class="bct-session-info">
+                        <span><?php _e('Started:', 'bubble-craps-tracker'); ?> <?php echo date('g:i A', strtotime($active_session->session_start)); ?></span>
+                        <span><?php _e('Duration:', 'bubble-craps-tracker'); ?> <span id="bct-session-time">0m</span></span>
+                    </div>
+                    <div class="bct-session-controls">
+                        <button id="bct-end-session" class="bct-btn bct-btn-primary bct-btn-lg">
+                            <?php _e('End Session', 'bubble-craps-tracker'); ?>
+                        </button>
+                        <button id="bct-pause-session" class="bct-btn bct-btn-secondary">
+                            <?php _e('Pause Session', 'bubble-craps-tracker'); ?>
+                        </button>
+                    </div>
+                </div>
+            <?php else: ?>
+                <!-- Start New Session -->
+                <div id="bct-session-inactive">
+                    <h2><?php _e('Start New Session', 'bubble-craps-tracker'); ?></h2>
+                    <p><?php _e('Select your casino and enter your starting bankroll to begin tracking.', 'bubble-craps-tracker'); ?></p>
                     <div class="bct-session-controls">
                         <button id="bct-open-modal" class="bct-btn bct-btn-primary bct-btn-lg" onclick="BCTracker.openModal()">
                             <?php _e('Start New Session', 'bubble-craps-tracker'); ?>
@@ -795,144 +935,4 @@ if ($active_session && $active_session->casino_id) {
     });
     
 })(jQuery);
-</script>bct-location-chip active" data-location="all">All States</div>
-                    <?php 
-                    $locations = bct_get_casino_locations();
-                    foreach (array_slice($locations, 0, 5) as $location): ?>
-                        <div class="bct-location-chip" data-location="<?php echo esc_attr($location['slug']); ?>">
-                            <?php echo esc_html($location['name']); ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                
-                <div class="bct-casino-list" id="bct-casino-list">
-                    <?php 
-                    $casinos = bct_get_casinos_for_session();
-                    if (!empty($casinos)): 
-                        foreach ($casinos as $casino): ?>
-                            <div class="bct-casino-item" 
-                                 data-casino-id="<?php echo $casino['id']; ?>" 
-                                 data-location="<?php echo esc_attr(strtolower($casino['location'])); ?>"
-                                 onclick="BCTracker.selectCasino(this)">
-                                <div class="bct-casino-info">
-                                    <h4><?php echo esc_html($casino['name']); ?></h4>
-                                    <div class="bct-casino-location"><?php echo esc_html($casino['location']); ?></div>
-                                </div>
-                                <div class="bct-casino-badges">
-                                    <?php if ($casino['has_bubble']): ?>
-                                        <span class="bct-badge bubble">Bubble Craps</span>
-                                    <?php endif; ?>
-                                    <?php if ($casino['has_tables']): ?>
-                                        <span class="bct-badge">Tables</span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php endforeach; 
-                    else: ?>
-                        <div class="bct-no-results">
-                            <p>No casinos found. <a href="https://www.bubble-craps.com/all-listings/add-listing/" target="_blank">Add a casino listing</a></p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                
-                <div class="bct-add-casino">
-                    Don't see your casino? <a href="https://www.bubble-craps.com/all-listings/add-listing/" target="_blank">Add a new listing</a>
-                </div>
-            </div>
-            
-            <!-- Step 2: Starting Bankroll -->
-            <div class="bct-step">
-                <div class="bct-step-title">
-                    <span class="bct-step-number">2</span>
-                    Starting Bankroll
-                </div>
-                
-                <input type="number" 
-                       id="bct-starting-bankroll" 
-                       class="bct-bankroll-input" 
-                       placeholder="Enter amount (e.g., 250.00)" 
-                       min="1" 
-                       step="0.01"
-                       onkeypress="BCTracker.handleBankrollKeypress(event)">
-            </div>
-        </div>
-        
-        <div class="bct-modal-footer">
-            <button class="bct-btn bct-btn-secondary" onclick="BCTracker.closeModal()">
-                Cancel
-            </button>
-            <button class="bct-btn bct-btn-primary" 
-                    id="bct-start-session-btn" 
-                    onclick="BCTracker.startSessionFromModal()" 
-                    disabled>
-                Start Session
-            </button>
-        </div>
-    </div>
-</div>
-
-<div class="bct-container">
-    <!-- Header -->
-    <div class="bct-header">
-        <h1><?php printf(__('Welcome back, %s!', 'bubble-craps-tracker'), $current_user->display_name); ?></h1>
-        <p><?php _e('Track your craps sessions, analyze your performance, and compete with other players.', 'bubble-craps-tracker'); ?></p>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <div class="bct-nav-tabs">
-        <button class="bct-nav-tab active" data-target="#bct-dashboard">
-            <?php _e('Dashboard', 'bubble-craps-tracker'); ?>
-        </button>
-        <button class="bct-nav-tab" data-target="#bct-analytics">
-            <?php _e('Analytics', 'bubble-craps-tracker'); ?>
-        </button>
-        <button class="bct-nav-tab" data-target="#bct-community">
-            <?php _e('Community', 'bubble-craps-tracker'); ?>
-        </button>
-        <button class="bct-nav-tab" data-target="#bct-achievements">
-            <?php _e('Achievements', 'bubble-craps-tracker'); ?>
-        </button>
-    </div>
-
-    <!-- Dashboard Tab Content -->
-    <div id="bct-dashboard" class="bct-tab-content">
-        
-        <!-- Session Tracker -->
-        <div class="bct-session-tracker <?php echo $active_session ? 'bct-session-active' : ''; ?>">
-            <?php if ($active_session): ?>
-                <!-- Active Session Display -->
-                <div id="bct-session-active">
-                    <h2><?php _e('Active Session', 'bubble-craps-tracker'); ?></h2>
-                    
-                    <?php if ($session_casino): ?>
-                        <div class="bct-session-casino">
-                            <span class="bct-casino-label"><?php _e('Playing at:', 'bubble-craps-tracker'); ?></span>
-                            <strong><?php echo esc_html($session_casino['name']); ?></strong>
-                            <span class="bct-casino-location"><?php echo esc_html($session_casino['location']); ?></span>
-                        </div>
-                    <?php endif; ?>
-                    
-                    <div class="bct-bankroll-display">
-                        <div><?php _e('Current Bankroll', 'bubble-craps-tracker'); ?></div>
-                        <div id="bct-current-bankroll">$<?php echo number_format($active_session->starting_bankroll, 2); ?></div>
-                        <div id="bct-net-result" class="bct-stat-positive">+$0.00</div>
-                    </div>
-                    <div class="bct-session-info">
-                        <span><?php _e('Started:', 'bubble-craps-tracker'); ?> <?php echo date('g:i A', strtotime($active_session->session_start)); ?></span>
-                        <span><?php _e('Duration:', 'bubble-craps-tracker'); ?> <span id="bct-session-time">0m</span></span>
-                    </div>
-                    <div class="bct-session-controls">
-                        <button id="bct-end-session" class="bct-btn bct-btn-primary bct-btn-lg">
-                            <?php _e('End Session', 'bubble-craps-tracker'); ?>
-                        </button>
-                        <button id="bct-pause-session" class="bct-btn bct-btn-secondary">
-                            <?php _e('Pause Session', 'bubble-craps-tracker'); ?>
-                        </button>
-                    </div>
-                </div>
-            <?php else: ?>
-                <!-- Start New Session -->
-                <div id="bct-session-inactive">
-                    <h2><?php _e('Start New Session', 'bubble-craps-tracker'); ?></h2>
-                    <p><?php _e('Select your casino and enter your starting bankroll to begin tracking.', 'bubble-craps-tracker'); ?></p>
-                    <div class="
+</script>

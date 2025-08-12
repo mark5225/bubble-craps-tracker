@@ -1,6 +1,6 @@
 <?php
 /**
- * MINIMAL TEST Dashboard - Just Modal + Button
+ * Dashboard Template - Fixed Version
  */
 
 // Prevent direct access
@@ -16,179 +16,102 @@ if (!is_user_logged_in()) {
 
 $user_id = get_current_user_id();
 $current_user = wp_get_current_user();
+
+// Handle form submissions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['start_session'])) {
+        global $wpdb;
+        
+        $casino_id = isset($_POST['casino_id']) ? intval($_POST['casino_id']) : null;
+        $starting_bankroll = floatval($_POST['starting_bankroll']);
+        
+        if ($starting_bankroll > 0) {
+            $result = $wpdb->insert(
+                $wpdb->prefix . 'craps_sessions',
+                array(
+                    'user_id' => $user_id,
+                    'casino_id' => $casino_id,
+                    'starting_bankroll' => $starting_bankroll,
+                    'session_status' => 'active'
+                ),
+                array('%d', '%d', '%f', '%s')
+            );
+            
+            if ($result) {
+                echo '<div class="bct-success-message">✅ Session started successfully! Starting bankroll: $' . number_format($starting_bankroll, 2) . '</div>';
+            }
+        }
+    }
+    
+    if (isset($_POST['log_session'])) {
+        global $wpdb;
+        
+        $casino_id = isset($_POST['casino_id']) ? intval($_POST['casino_id']) : null;
+        $starting_bankroll = floatval($_POST['starting_bankroll']);
+        $ending_bankroll = floatval($_POST['ending_bankroll']);
+        $notes = sanitize_textarea_field($_POST['notes']);
+        
+        if ($starting_bankroll > 0 && $ending_bankroll >= 0) {
+            $net_result = $ending_bankroll - $starting_bankroll;
+            
+            $result = $wpdb->insert(
+                $wpdb->prefix . 'craps_sessions',
+                array(
+                    'user_id' => $user_id,
+                    'casino_id' => $casino_id,
+                    'starting_bankroll' => $starting_bankroll,
+                    'ending_bankroll' => $ending_bankroll,
+                    'net_result' => $net_result,
+                    'session_status' => 'completed',
+                    'session_end' => current_time('mysql'),
+                    'notes' => $notes
+                ),
+                array('%d', '%d', '%f', '%f', '%f', '%s', '%s', '%s')
+            );
+            
+            if ($result) {
+                $result_color = $net_result >= 0 ? '#28a745' : '#C51F1F';
+                $result_text = ($net_result >= 0 ? '+' : '') . '$' . number_format($net_result, 2);
+                echo '<div class="bct-success-message">✅ Session logged! Result: <span style="color: ' . $result_color . '; font-weight: bold;">' . $result_text . '</span></div>';
+            }
+        }
+    }
+}
+
+// Get user stats
+global $wpdb;
+$stats = $wpdb->get_row($wpdb->prepare("
+    SELECT 
+        COUNT(*) as total_sessions,
+        COUNT(CASE WHEN session_status = 'completed' THEN 1 END) as completed_sessions,
+        COUNT(CASE WHEN session_status = 'active' THEN 1 END) as active_sessions,
+        SUM(CASE WHEN session_status = 'completed' THEN net_result ELSE 0 END) as total_net_result,
+        AVG(CASE WHEN session_status = 'completed' THEN net_result ELSE NULL END) as avg_session_result,
+        MAX(CASE WHEN session_status = 'completed' THEN net_result ELSE NULL END) as best_session
+    FROM {$wpdb->prefix}craps_sessions 
+    WHERE user_id = %d
+", $user_id));
+
+// Get recent sessions
+$recent_sessions = $wpdb->get_results($wpdb->prepare("
+    SELECT s.*, p.post_title as casino_name
+    FROM {$wpdb->prefix}craps_sessions s
+    LEFT JOIN {$wpdb->posts} p ON s.casino_id = p.ID
+    WHERE s.user_id = %d 
+    ORDER BY s.session_start DESC 
+    LIMIT 5
+", $user_id));
 ?>
 
-<!-- Enhanced Casino Selection Modal -->
-<div id="bct-casino-modal" class="bct-modal-overlay">
-    <div class="bct-modal">
-        <div class="bct-modal-header">
-            <h2 class="bct-modal-title">Log Your Session</h2>
-            <button class="bct-modal-close" onclick="BCTracker.closeModal()">&times;</button>
-        </div>
-        
-        <div class="bct-modal-body">
-            <!-- Step 1: Select Casino -->
-            <div class="bct-step">
-                <div class="bct-step-title">
-                    <span class="bct-step-number">1</span>
-                    Where did you play?
-                </div>
-                
-                <div class="bct-casino-search">
-                    <input type="text" 
-                           id="bct-casino-search" 
-                           class="bct-search-input" 
-                           placeholder="Search casinos..."
-                           onkeyup="BCTracker.filterCasinos()">
-                </div>
-                
-                <div class="bct-casino-grid">
-                    <?php 
-                    $casinos = bct_get_casinos_for_session();
-                    if (!empty($casinos)): 
-                        foreach ($casinos as $casino): 
-                            // Get bubble craps details
-                            $bubble_types = get_post_meta($casino['id'], '_custom-checkbox', true);
-                            $min_bet = get_post_meta($casino['id'], '_custom-radio-3', true);
-                            ?>
-                            <div class="bct-casino-card" 
-                                 data-casino-id="<?php echo $casino['id']; ?>"
-                                 onclick="BCTracker.selectCasino(this, <?php echo htmlspecialchars(json_encode($casino)); ?>)">
-                                
-                                <div class="bct-casino-image">
-                                    <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='80' viewBox='0 0 100 80'><rect width='100' height='80' fill='%23f8f9fa'/><text x='50' y='45' text-anchor='middle' fill='%236c757d' font-size='24'>🏢</text></svg>" alt="<?php echo esc_attr($casino['name']); ?>">
-                                    
-                                    <?php if ($casino['has_bubble']): ?>
-                                        <div class="bct-casino-badge">
-                                            <?php if (is_array($bubble_types) && count($bubble_types) > 1): ?>
-                                                <span class="bct-badge-bubble"><?php echo count($bubble_types); ?> Machines</span>
-                                            <?php else: ?>
-                                                <span class="bct-badge-bubble">Bubble Craps</span>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                                
-                                <div class="bct-casino-content">
-                                    <h4 class="bct-casino-name"><?php echo esc_html($casino['name']); ?></h4>
-                                    <p class="bct-casino-location"><?php echo esc_html($casino['location']); ?></p>
-                                    
-                                    <div class="bct-casino-details">
-                                        <?php if ($min_bet && $min_bet !== 'N/A or Unknown'): ?>
-                                            <span class="bct-detail-tag">Min: <?php echo esc_html($min_bet); ?></span>
-                                        <?php endif; ?>
-                                        
-                                        <?php if ($casino['has_tables']): ?>
-                                            <span class="bct-detail-tag">Tables</span>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; 
-                    else: ?>
-                        <div class="bct-no-casinos">
-                            <p>No casinos found. <a href="https://www.bubble-craps.com/all-listings/add-listing/" target="_blank">Add a casino</a></p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            
-            <!-- Step 2: Session Details -->
-            <div class="bct-step">
-                <div class="bct-step-title">
-                    <span class="bct-step-number">2</span>
-                    How did your session go?
-                </div>
-                
-                <div class="bct-form-grid">
-                    <div class="bct-form-group">
-                        <label class="bct-form-label">Starting Bankroll ($)</label>
-                        <input type="number" id="bct-starting-bankroll" class="bct-form-input" 
-                               placeholder="100.00" min="1" step="0.01" required>
-                    </div>
-                    <div class="bct-form-group">
-                        <label class="bct-form-label">Ending Bankroll ($)</label>
-                        <input type="number" id="bct-ending-bankroll" class="bct-form-input" 
-                               placeholder="150.00" min="0" step="0.01" required>
-                    </div>
-                </div>
-                
-                <div class="bct-form-group">
-                    <label class="bct-form-label">Session Notes (optional)</label>
-                    <textarea id="bct-notes" class="bct-form-textarea" 
-                              placeholder="How did the session go? Any memorable moments?"></textarea>
-                </div>
-            </div>
-        </div>
-        
-        <div class="bct-log-session-card">
-    <div class="bct-card-header">
-        <h2>Log Your Latest Session</h2>
-        <p>Record your bubble craps session and track your progress</p>
-    </div>
-    <button id="bct-open-modal" class="bct-btn bct-btn-primary bct-btn-large" onclick="BCTracker.openModal()">
-        📝 Log Session
-    </button>
-</div>
-    </div>
-</div>
-
 <style>
-.bct-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
-
-.bct-modal-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.bct-modal {
-    background: white;
-    border-radius: 12px;
-    width: 500px;
-    padding: 20px;
-}
-
-.bct-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.bct-modal-header button {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-}
-
-
-/* Modern Dashboard CSS - Matching Bubble-Craps.com Design */
-
-/* Base Styles */
+/* Dashboard CSS */
 .bct-container {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    line-height: 1.6;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-/* Header Card */
 .bct-header {
     background: linear-gradient(135deg, #1D3557 0%, #2a4a6b 100%);
     color: white;
@@ -210,42 +133,100 @@ $current_user = wp_get_current_user();
     font-size: 1.1rem;
 }
 
-/* Log Session Card */
-.bct-log-session-card {
-    background: linear-gradient(135deg, #C51F1F 0%, #a01919 100%);
-    color: white;
-    padding: 40px;
+.bct-success-message {
+    background: #d4edda;
+    color: #155724;
+    padding: 15px 20px;
     border-radius: 8px;
-    text-align: center;
-    margin-bottom: 30px;
-    box-shadow: 0 4px 15px rgba(197, 31, 31, 0.2);
+    margin-bottom: 25px;
+    border: 1px solid #c3e6cb;
+    font-weight: 600;
 }
 
-.bct-card-header h2 {
+.bct-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.bct-stat-card {
+    background: white;
+    padding: 25px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-top: 4px solid #C51F1F;
+}
+
+.bct-stat-number {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #1D3557;
+    margin: 10px 0;
+}
+
+.bct-stat-positive { color: #28a745 !important; }
+.bct-stat-negative { color: #C51F1F !important; }
+
+.bct-stat-label {
+    color: #6c757d;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.bct-action-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.bct-action-card {
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bct-card-header {
+    padding: 25px;
+    text-align: center;
+}
+
+.bct-card-header.primary {
+    background: linear-gradient(135deg, #C51F1F 0%, #a01919 100%);
+    color: white;
+}
+
+.bct-card-header.secondary {
+    background: linear-gradient(135deg, #1D3557 0%, #2a4a6b 100%);
+    color: white;
+}
+
+.bct-card-header h3 {
     margin: 0 0 10px 0;
-    font-size: 1.8rem;
+    font-size: 1.4rem;
     font-weight: 700;
 }
 
 .bct-card-header p {
-    margin: 0 0 25px 0;
+    margin: 0;
     opacity: 0.9;
-    font-size: 1.1rem;
 }
 
-/* Buttons */
 .bct-btn {
-    padding: 12px 24px;
+    padding: 15px 30px;
     border: none;
     border-radius: 8px;
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     text-decoration: none;
     display: inline-block;
     text-align: center;
-    font-family: inherit;
+    margin-top: 15px;
 }
 
 .bct-btn-primary {
@@ -256,7 +237,6 @@ $current_user = wp_get_current_user();
 .bct-btn-primary:hover {
     background: #a01919;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(197, 31, 31, 0.3);
 }
 
 .bct-btn-secondary {
@@ -264,23 +244,65 @@ $current_user = wp_get_current_user();
     color: white;
 }
 
-.bct-btn-secondary:hover {
-    background: #5a6268;
-    transform: translateY(-1px);
+.bct-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+    overflow: hidden;
 }
 
-.bct-btn-large {
-    padding: 18px 36px;
-    font-size: 1.2rem;
+.bct-card-title-header {
+    background: #1D3557;
+    color: white;
+    padding: 20px 30px;
 }
 
-.bct-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none !important;
+.bct-card-title-header h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 700;
 }
 
-/* Modal Styles */
+.bct-card-content {
+    padding: 30px;
+}
+
+.bct-sessions-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.bct-sessions-table th,
+.bct-sessions-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.bct-sessions-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #1D3557;
+}
+
+.bct-status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.bct-status-active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.bct-status-completed {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
 .bct-modal-overlay {
     position: fixed;
     top: 0;
@@ -306,30 +328,23 @@ $current_user = wp_get_current_user();
     background: white;
     border-radius: 8px;
     width: 95%;
-    max-width: 900px;
+    max-width: 600px;
     max-height: 90vh;
     overflow-y: auto;
-    transform: translateY(-30px);
-    transition: transform 0.3s ease;
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
 }
 
-.bct-modal-overlay.active .bct-modal {
-    transform: translateY(0);
-}
-
 .bct-modal-header {
-    background: linear-gradient(135deg, #1D3557 0%, #2a4a6b 100%);
+    background: #1D3557;
     color: white;
     padding: 25px 30px;
-    border-radius: 8px 8px 0 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .bct-modal-title {
-    font-size: 1.6rem;
+    font-size: 1.4rem;
     font-weight: 700;
     margin: 0;
 }
@@ -338,185 +353,13 @@ $current_user = wp_get_current_user();
     background: none;
     border: none;
     color: white;
-    font-size: 28px;
+    font-size: 24px;
     cursor: pointer;
-    padding: 0;
-    width: 35px;
-    height: 35px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    transition: background 0.2s ease;
-}
-
-.bct-modal-close:hover {
-    background: rgba(255, 255, 255, 0.2);
+    padding: 5px;
 }
 
 .bct-modal-body {
     padding: 30px;
-    max-height: 60vh;
-    overflow-y: auto;
-}
-
-.bct-modal-footer {
-    padding: 25px 30px;
-    border-top: 1px solid #e9ecef;
-    display: flex;
-    gap: 15px;
-    justify-content: flex-end;
-    background: #f8f9fa;
-    border-radius: 0 0 8px 8px;
-}
-
-/* Steps */
-.bct-step {
-    margin-bottom: 35px;
-}
-
-.bct-step-title {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: #1D3557;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-}
-
-.bct-step-number {
-    background: #C51F1F;
-    color: white;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    font-weight: 700;
-    margin-right: 12px;
-}
-
-/* Casino Search */
-.bct-casino-search {
-    margin-bottom: 25px;
-}
-
-.bct-search-input {
-    width: 100%;
-    padding: 15px 20px;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
-    box-sizing: border-box;
-    font-family: inherit;
-}
-
-.bct-search-input:focus {
-    outline: none;
-    border-color: #C51F1F;
-    box-shadow: 0 0 0 3px rgba(197, 31, 31, 0.1);
-}
-
-/* Casino Grid */
-.bct-casino-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    max-height: 400px;
-    overflow-y: auto;
-    padding: 10px 0;
-}
-
-.bct-casino-card {
-    background: white;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.bct-casino-card:hover {
-    border-color: #C51F1F;
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.bct-casino-card.selected {
-    border-color: #C51F1F;
-    background: #fff3cd;
-    box-shadow: 0 6px 20px rgba(197, 31, 31, 0.2);
-}
-
-.bct-casino-image {
-    position: relative;
-    height: 120px;
-    overflow: hidden;
-}
-
-.bct-casino-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.bct-casino-badge {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-}
-
-.bct-badge-bubble {
-    background: #C51F1F;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.bct-casino-content {
-    padding: 20px;
-}
-
-.bct-casino-name {
-    margin: 0 0 8px 0;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #1D3557;
-}
-
-.bct-casino-location {
-    margin: 0 0 12px 0;
-    color: #6c757d;
-    font-size: 0.9rem;
-}
-
-.bct-casino-details {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
-.bct-detail-tag {
-    background: #e9ecef;
-    color: #495057;
-    padding: 3px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-/* Form Elements */
-.bct-form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
 }
 
 .bct-form-group {
@@ -528,243 +371,323 @@ $current_user = wp_get_current_user();
     margin-bottom: 8px;
     font-weight: 600;
     color: #1D3557;
-    font-size: 0.95rem;
 }
 
-.bct-form-input {
+.bct-form-input,
+.bct-form-textarea {
     width: 100%;
     padding: 12px 15px;
     border: 2px solid #e9ecef;
     border-radius: 8px;
     font-size: 1rem;
-    transition: border-color 0.3s ease;
     box-sizing: border-box;
-    font-family: inherit;
-}
-
-.bct-form-input:focus {
-    outline: none;
-    border-color: #C51F1F;
-    box-shadow: 0 0 0 3px rgba(197, 31, 31, 0.1);
-}
-
-.bct-form-textarea {
-    width: 100%;
-    padding: 15px;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    font-size: 1rem;
-    min-height: 100px;
-    resize: vertical;
-    box-sizing: border-box;
-    font-family: inherit;
     transition: border-color 0.3s ease;
 }
 
+.bct-form-input:focus,
 .bct-form-textarea:focus {
     outline: none;
     border-color: #C51F1F;
-    box-shadow: 0 0 0 3px rgba(197, 31, 31, 0.1);
 }
 
-/* Stats Grid */
-.bct-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
+.bct-form-textarea {
+    min-height: 100px;
+    resize: vertical;
 }
 
-.bct-stat-card {
-    background: white;
-    padding: 25px;
-    border-radius: 8px;
-    text-align: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border-top: 4px solid #C51F1F;
-    transition: transform 0.3s ease;
-}
-
-.bct-stat-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.bct-stat-number {
-    font-size: 2.2rem;
-    font-weight: 700;
-    color: #1D3557;
-    margin: 10px 0;
-}
-
-.bct-stat-label {
-    color: #6c757d;
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-.bct-stat-positive {
-    color: #28a745 !important;
-}
-
-.bct-stat-negative {
-    color: #C51F1F !important;
-}
-
-/* Content Cards */
-.bct-card {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    margin-bottom: 30px;
-    overflow: hidden;
-}
-
-.bct-card-header {
-    background: #1D3557;
-    color: white;
-    padding: 20px 30px;
-    border-bottom: none;
-}
-
-.bct-card-header h3 {
-    margin: 0;
-    font-size: 1.3rem;
-    font-weight: 700;
-}
-
-.bct-card-content {
-    padding: 30px;
-}
-
-/* Empty States */
-.bct-no-casinos {
-    text-align: center;
-    padding: 60px 20px;
-    color: #6c757d;
-    grid-column: 1 / -1;
-}
-
-.bct-no-casinos p {
-    margin: 0;
-    font-size: 1.1rem;
-}
-
-.bct-no-casinos a {
-    color: #C51F1F;
-    text-decoration: none;
-    font-weight: 600;
-}
-
-.bct-no-casinos a:hover {
-    text-decoration: underline;
-}
-
-/* Success Messages */
-.bct-success-message {
-    background: #d4edda;
-    color: #155724;
-    padding: 15px 20px;
-    border-radius: 8px;
+.bct-casino-select {
     margin-bottom: 25px;
-    border: 1px solid #c3e6cb;
-    font-weight: 600;
 }
 
-/* Responsive Design */
+.bct-casino-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.bct-casino-option {
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 5px;
+    transition: background 0.2s ease;
+}
+
+.bct-casino-option:hover {
+    background: #f8f9fa;
+}
+
+.bct-casino-option.selected {
+    background: #C51F1F;
+    color: white;
+}
+
 @media (max-width: 768px) {
-    .bct-container {
-        padding: 15px;
-    }
-    
-    .bct-header,
-    .bct-log-session-card {
-        padding: 25px 20px;
-    }
-    
-    .bct-header h1 {
-        font-size: 1.8rem;
-    }
-    
-    .bct-modal {
-        width: 95%;
-        margin: 20px 10px;
-        max-height: 90vh;
-    }
-    
-    .bct-modal-header,
-    .bct-modal-body,
-    .bct-modal-footer {
-        padding: 20px;
-    }
-    
-    .bct-casino-grid {
-        grid-template-columns: 1fr;
-        max-height: 300px;
-    }
-    
-    .bct-form-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-    
-    .bct-stats-grid {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-    }
-    
-    .bct-modal-footer {
-        flex-direction: column;
-    }
-    
-    .bct-btn {
-        width: 100%;
-    }
-}
-
-@media (max-width: 480px) {
-    .bct-header h1 {
-        font-size: 1.5rem;
-    }
-    
-    .bct-card-header h2 {
-        font-size: 1.5rem;
-    }
-    
-    .bct-stat-number {
-        font-size: 1.8rem;
-    }
-    
-    .bct-casino-card {
-        min-width: 100%;
-    }
+    .bct-container { padding: 15px; }
+    .bct-header { padding: 25px 20px; }
+    .bct-action-cards { grid-template-columns: 1fr; }
+    .bct-stats-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
 
+<div class="bct-container">
+    <!-- Header -->
+    <div class="bct-header">
+        <h1>Welcome back, <?php echo esc_html($current_user->display_name); ?>!</h1>
+        <p>Track your craps sessions and analyze your performance.</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="bct-stats-grid">
+        <div class="bct-stat-card">
+            <div class="bct-stat-label">Total Sessions</div>
+            <div class="bct-stat-number"><?php echo $stats->total_sessions ?: 0; ?></div>
+        </div>
+        <div class="bct-stat-card">
+            <div class="bct-stat-label">Active Sessions</div>
+            <div class="bct-stat-number"><?php echo $stats->active_sessions ?: 0; ?></div>
+        </div>
+        <div class="bct-stat-card">
+            <div class="bct-stat-label">Net Winnings</div>
+            <div class="bct-stat-number <?php echo ($stats->total_net_result >= 0) ? 'bct-stat-positive' : 'bct-stat-negative'; ?>">
+                <?php echo ($stats->total_net_result >= 0 ? '+' : '') . '$' . number_format($stats->total_net_result ?: 0, 2); ?>
+            </div>
+        </div>
+        <div class="bct-stat-card">
+            <div class="bct-stat-label">Best Session</div>
+            <div class="bct-stat-number bct-stat-positive">
+                <?php echo $stats->best_session ? '+$' . number_format($stats->best_session, 2) : '$0.00'; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Cards -->
+    <div class="bct-action-cards">
+        <div class="bct-action-card">
+            <div class="bct-card-header primary">
+                <h3>Log Past Session</h3>
+                <p>Record a session you already played</p>
+                <button type="button" class="bct-btn bct-btn-primary" onclick="openLogModal()">
+                    📝 Log Session
+                </button>
+            </div>
+        </div>
+        
+        <div class="bct-action-card">
+            <div class="bct-card-header secondary">
+                <h3>Start Live Session</h3>
+                <p>Begin tracking a new session</p>
+                <button type="button" class="bct-btn bct-btn-secondary" onclick="openStartModal()">
+                    🎲 Start Session
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sessions -->
+    <div class="bct-card">
+        <div class="bct-card-title-header">
+            <h3>Recent Sessions</h3>
+        </div>
+        <div class="bct-card-content">
+            <?php if ($recent_sessions): ?>
+                <table class="bct-sessions-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Casino</th>
+                            <th>Starting</th>
+                            <th>Result</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($recent_sessions as $session): ?>
+                        <tr>
+                            <td><?php echo date('M j, Y', strtotime($session->session_start)); ?></td>
+                            <td><?php echo $session->casino_name ?: 'Not specified'; ?></td>
+                            <td>$<?php echo number_format($session->starting_bankroll, 2); ?></td>
+                            <td>
+                                <?php if ($session->session_status === 'completed' && $session->net_result !== null): ?>
+                                    <span class="<?php echo $session->net_result >= 0 ? 'bct-stat-positive' : 'bct-stat-negative'; ?>">
+                                        <?php echo ($session->net_result >= 0 ? '+' : '') . '$' . number_format($session->net_result, 2); ?>
+                                    </span>
+                                <?php else: ?>
+                                    -
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <span class="bct-status-badge bct-status-<?php echo $session->session_status; ?>">
+                                    <?php echo ucfirst($session->session_status); ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p>No sessions yet. Start tracking your craps games above!</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<!-- Log Session Modal -->
+<div id="log-session-modal" class="bct-modal-overlay">
+    <div class="bct-modal">
+        <div class="bct-modal-header">
+            <h3 class="bct-modal-title">Log Past Session</h3>
+            <button class="bct-modal-close" onclick="closeLogModal()">&times;</button>
+        </div>
+        <div class="bct-modal-body">
+            <form method="post">
+                <input type="hidden" name="log_session" value="1">
+                
+                <div class="bct-casino-select">
+                    <label class="bct-form-label">Casino (optional)</label>
+                    <div class="bct-casino-list">
+                        <div class="bct-casino-option" data-casino-id="" onclick="selectCasino(this, '')">
+                            <strong>Not specified</strong>
+                        </div>
+                        <?php 
+                        $casinos = bct_get_casinos_for_session();
+                        foreach ($casinos as $casino): ?>
+                            <div class="bct-casino-option" data-casino-id="<?php echo $casino['id']; ?>" 
+                                 onclick="selectCasino(this, '<?php echo $casino['id']; ?>')">
+                                <strong><?php echo esc_html($casino['name']); ?></strong><br>
+                                <small><?php echo esc_html($casino['location']); ?></small>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <input type="hidden" name="casino_id" id="selected-casino-id">
+                </div>
+                
+                <div class="bct-form-group">
+                    <label class="bct-form-label" for="starting_bankroll">Starting Bankroll ($) *</label>
+                    <input type="number" id="starting_bankroll" name="starting_bankroll" 
+                           class="bct-form-input" placeholder="100.00" min="1" step="0.01" required>
+                </div>
+                
+                <div class="bct-form-group">
+                    <label class="bct-form-label" for="ending_bankroll">Ending Bankroll ($) *</label>
+                    <input type="number" id="ending_bankroll" name="ending_bankroll" 
+                           class="bct-form-input" placeholder="150.00" min="0" step="0.01" required>
+                </div>
+                
+                <div class="bct-form-group">
+                    <label class="bct-form-label" for="notes">Session Notes</label>
+                    <textarea id="notes" name="notes" class="bct-form-textarea" 
+                              placeholder="How did the session go? Any memorable moments?"></textarea>
+                </div>
+                
+                <button type="submit" class="bct-btn bct-btn-primary" style="width: 100%;">
+                    Save Session
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Start Session Modal -->
+<div id="start-session-modal" class="bct-modal-overlay">
+    <div class="bct-modal">
+        <div class="bct-modal-header">
+            <h3 class="bct-modal-title">Start New Session</h3>
+            <button class="bct-modal-close" onclick="closeStartModal()">&times;</button>
+        </div>
+        <div class="bct-modal-body">
+            <form method="post">
+                <input type="hidden" name="start_session" value="1">
+                
+                <div class="bct-casino-select">
+                    <label class="bct-form-label">Casino (optional)</label>
+                    <div class="bct-casino-list">
+                        <div class="bct-casino-option" data-casino-id="" onclick="selectStartCasino(this, '')">
+                            <strong>Not specified</strong>
+                        </div>
+                        <?php foreach ($casinos as $casino): ?>
+                            <div class="bct-casino-option" data-casino-id="<?php echo $casino['id']; ?>" 
+                                 onclick="selectStartCasino(this, '<?php echo $casino['id']; ?>')">
+                                <strong><?php echo esc_html($casino['name']); ?></strong><br>
+                                <small><?php echo esc_html($casino['location']); ?></small>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <input type="hidden" name="casino_id" id="start-selected-casino-id">
+                </div>
+                
+                <div class="bct-form-group">
+                    <label class="bct-form-label" for="start_bankroll">Starting Bankroll ($) *</label>
+                    <input type="number" id="start_bankroll" name="starting_bankroll" 
+                           class="bct-form-input" placeholder="100.00" min="1" step="0.01" required>
+                </div>
+                
+                <button type="submit" class="bct-btn bct-btn-primary" style="width: 100%;">
+                    Start Session
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-// MINIMAL BCTracker for testing
-window.BCTracker = {
-    openModal: function() {
-        console.log('openModal called');
-        const modal = document.getElementById('bct-casino-modal');
-        if (modal) {
-            modal.classList.add('active');
-            console.log('Modal opened');
-        } else {
-            console.log('Modal not found!');
-        }
-    },
+function openLogModal() {
+    document.getElementById('log-session-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLogModal() {
+    document.getElementById('log-session-modal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function openStartModal() {
+    document.getElementById('start-session-modal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeStartModal() {
+    document.getElementById('start-session-modal').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function selectCasino(element, casinoId) {
+    // Remove selection from all options in this modal
+    const modal = element.closest('.bct-modal');
+    modal.querySelectorAll('.bct-casino-option').forEach(opt => opt.classList.remove('selected'));
     
-    closeModal: function() {
-        console.log('closeModal called');
-        const modal = document.getElementById('bct-casino-modal');
-        if (modal) {
-            modal.classList.remove('active');
-            console.log('Modal closed');
-        }
+    // Select this option
+    element.classList.add('selected');
+    document.getElementById('selected-casino-id').value = casinoId;
+}
+
+function selectStartCasino(element, casinoId) {
+    // Remove selection from all options in this modal
+    const modal = element.closest('.bct-modal');
+    modal.querySelectorAll('.bct-casino-option').forEach(opt => opt.classList.remove('selected'));
+    
+    // Select this option
+    element.classList.add('selected');
+    document.getElementById('start-selected-casino-id').value = casinoId;
+}
+
+// Close modals on escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeLogModal();
+        closeStartModal();
     }
-};
+});
 
-console.log('BCTracker loaded:', window.BCTracker);
+// Close modals on overlay click
+document.querySelectorAll('.bct-modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            closeLogModal();
+            closeStartModal();
+        }
+    });
+});
 </script>
-

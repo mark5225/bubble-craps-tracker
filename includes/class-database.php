@@ -27,25 +27,25 @@ class BCT_Database {
         // Sessions table
         $sessions_table = $wpdb->prefix . 'craps_sessions';
         $sessions_sql = "CREATE TABLE $sessions_table (
-            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-            user_id bigint(20) unsigned NOT NULL,
-			casino_id bigint(20) unsigned NULL,
-            session_start datetime DEFAULT CURRENT_TIMESTAMP,
-            session_end datetime NULL,
-            starting_bankroll decimal(10,2) NOT NULL DEFAULT 0.00,
-            ending_bankroll decimal(10,2) NULL,
-            total_wagered decimal(10,2) DEFAULT 0.00,
-            net_result decimal(10,2) DEFAULT 0.00,
-            session_status enum('active','completed','paused') DEFAULT 'active',
-            notes text,
-            created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            KEY user_id (user_id),
-            KEY session_status (session_status),
-            KEY session_start (session_start)
-			KEY casino_id (casino_id),
-        ) $charset_collate;";
+    id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+    user_id bigint(20) unsigned NOT NULL,
+    casino_id bigint(20) unsigned NULL,
+    session_start datetime DEFAULT CURRENT_TIMESTAMP,
+    session_end datetime NULL,
+    starting_bankroll decimal(10,2) NOT NULL DEFAULT 0.00,
+    ending_bankroll decimal(10,2) NULL,
+    total_wagered decimal(10,2) DEFAULT 0.00,
+    net_result decimal(10,2) DEFAULT 0.00,
+    session_status enum('active','completed','paused') DEFAULT 'active',
+    notes text,
+    created_at datetime DEFAULT CURRENT_TIMESTAMP,
+    updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY user_id (user_id),
+    KEY session_status (session_status),
+    KEY session_start (session_start),
+    KEY casino_id (casino_id)
+) $charset_collate;";
         
         // Session bets table
         $bets_table = $wpdb->prefix . 'craps_session_bets';

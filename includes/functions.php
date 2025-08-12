@@ -765,3 +765,143 @@ function bct_get_user_casino_stats($user_id) {
     ", $user_id));
 }
 ?>
+
+<?php
+/**
+ * Casino Integration Functions
+ * ADD THIS TO THE END OF includes/functions.php
+ */
+
+/**
+ * Get casinos with bubble craps for session tracking
+ */
+function bct_get_casinos_for_session() {
+    $args = array(
+        'post_type' => 'at_biz_dir',
+        'post_status' => 'publish',
+        'posts_per_page' => -1,
+        'meta_query' => array(
+            'relation' => 'OR',
+            array(
+                'key' => '_custom-checkbox',
+                'value' => 'single',
+                'compare' => 'LIKE'
+            ),
+            array(
+                'key' => '_custom-checkbox',
+                'value' => 'stadium',
+                'compare' => 'LIKE'
+            ),
+            array(
+                'key' => '_custom-checkbox',
+                'value' => 'casino wizard',
+                'compare' => 'LIKE'
+            )
+        ),
+        'orderby' => 'title',
+        'order' => 'ASC'
+    );
+    
+    $casinos = get_posts($args);
+    $formatted_casinos = array();
+    
+    foreach ($casinos as $casino) {
+        $location_terms = wp_get_post_terms($casino->ID, 'at_biz_dir-location', array('fields' => 'names'));
+        $location = !empty($location_terms) ? $location_terms[0] : '';
+        
+        // Get bubble craps types
+        $bubble_types = get_post_meta($casino->ID, '_custom-checkbox', true);
+        $bubble_types = is_array($bubble_types) ? $bubble_types : array();
+        
+        // Check if has traditional tables
+        $craps_tables = get_post_meta($casino->ID, '_custom-radio-4', true);
+        $has_tables = $craps_tables && $craps_tables !== 'No Craps Tables';
+        
+        $formatted_casinos[] = array(
+            'id' => $casino->ID,
+            'name' => $casino->post_title,
+            'location' => $location,
+            'has_bubble' => !empty($bubble_types) && !in_array('none', $bubble_types),
+            'has_tables' => $has_tables,
+            'bubble_types' => $bubble_types,
+            'url' => get_permalink($casino->ID)
+        );
+    }
+    
+    return $formatted_casinos;
+}
+
+/**
+ * Get unique locations for filter
+ */
+function bct_get_casino_locations() {
+    $terms = get_terms(array(
+        'taxonomy' => 'at_biz_dir-location',
+        'hide_empty' => true,
+        'orderby' => 'count',
+        'order' => 'DESC'
+    ));
+    
+    $locations = array();
+    foreach ($terms as $term) {
+        $locations[] = array(
+            'slug' => $term->slug,
+            'name' => $term->name,
+            'count' => $term->count
+        );
+    }
+    
+    return $locations;
+}
+
+/**
+ * Get casino info for display
+ */
+function bct_get_casino_info($casino_id) {
+    if (!$casino_id) {
+        return null;
+    }
+    
+    $casino = get_post($casino_id);
+    if (!$casino || $casino->post_type !== 'at_biz_dir') {
+        return null;
+    }
+    
+    $location_terms = wp_get_post_terms($casino_id, 'at_biz_dir-location', array('fields' => 'names'));
+    $location = !empty($location_terms) ? $location_terms[0] : '';
+    
+    return array(
+        'id' => $casino_id,
+        'name' => $casino->post_title,
+        'location' => $location,
+        'url' => get_permalink($casino_id),
+        'phone' => get_post_meta($casino_id, '_phone', true),
+        'website' => get_post_meta($casino_id, '_website', true)
+    );
+}
+
+/**
+ * Enhanced user statistics with casino breakdown
+ */
+function bct_get_user_casino_stats($user_id) {
+    global $wpdb;
+    
+    return $wpdb->get_results($wpdb->prepare("
+        SELECT 
+            s.casino_id,
+            p.post_title as casino_name,
+            COUNT(*) as session_count,
+            AVG(CASE WHEN s.session_status = 'completed' THEN s.net_result ELSE NULL END) as avg_result,
+            SUM(CASE WHEN s.session_status = 'completed' AND s.net_result > 0 THEN 1 ELSE 0 END) as winning_sessions,
+            SUM(CASE WHEN s.session_status = 'completed' THEN 1 ELSE 0 END) as completed_sessions,
+            MAX(s.net_result) as best_session
+        FROM {$wpdb->prefix}craps_sessions s
+        LEFT JOIN {$wpdb->posts} p ON s.casino_id = p.ID
+        WHERE s.user_id = %d
+        GROUP BY s.casino_id, p.post_title
+        HAVING session_count >= 2
+        ORDER BY session_count DESC
+        LIMIT 10
+    ", $user_id));
+}
+?>

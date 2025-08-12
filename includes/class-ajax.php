@@ -31,6 +31,9 @@ class BCT_Ajax {
         // Admin AJAX actions
         add_action('wp_ajax_bct_get_analytics_data', array($this, 'get_analytics_data'));
         add_action('wp_ajax_bct_manage_feedback', array($this, 'manage_feedback'));
+		
+		add_action('wp_ajax_bct_get_casinos', array($this, 'get_casinos'));
+		add_action('wp_ajax_nopriv_bct_get_casinos', array($this, 'get_casinos'));
     }
     
     public function start_session() {
@@ -352,6 +355,36 @@ class BCT_Ajax {
         } else {
             wp_send_json_error('Failed to update feedback');
         }
+    }
+	
+	/**
+     * AJAX handler for casino search
+     * ADD THIS METHOD TO includes/class-ajax.php (before the closing })
+     */
+    public function get_casinos() {
+        check_ajax_referer('bct_frontend_nonce', 'nonce');
+        
+        $search = sanitize_text_field($_POST['search'] ?? '');
+        $location = sanitize_text_field($_POST['location'] ?? '');
+        
+        $casinos = bct_get_casinos_for_session();
+        
+        // Filter by search term
+        if (!empty($search)) {
+            $casinos = array_filter($casinos, function($casino) use ($search) {
+                return stripos($casino['name'], $search) !== false || 
+                       stripos($casino['location'], $search) !== false;
+            });
+        }
+        
+        // Filter by location
+        if (!empty($location) && $location !== 'all') {
+            $casinos = array_filter($casinos, function($casino) use ($location) {
+                return stripos(strtolower($casino['location']), str_replace('-', ' ', $location)) !== false;
+            });
+        }
+        
+        wp_send_json_success($casinos);
     }
 }
 ?>

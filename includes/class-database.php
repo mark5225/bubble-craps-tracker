@@ -29,6 +29,7 @@ class BCT_Database {
         $sessions_sql = "CREATE TABLE $sessions_table (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
             user_id bigint(20) unsigned NOT NULL,
+			casino_id bigint(20) unsigned NULL,
             session_start datetime DEFAULT CURRENT_TIMESTAMP,
             session_end datetime NULL,
             starting_bankroll decimal(10,2) NOT NULL DEFAULT 0.00,
@@ -43,6 +44,7 @@ class BCT_Database {
             KEY user_id (user_id),
             KEY session_status (session_status),
             KEY session_start (session_start)
+			KEY casino_id (casino_id),
         ) $charset_collate;";
         
         // Session bets table

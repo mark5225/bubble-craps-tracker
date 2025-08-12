@@ -175,7 +175,7 @@ $current_user = wp_get_current_user();
     font-size: 24px;
     cursor: pointer;
 }
-</style>
+
 
 /* Modern Dashboard CSS - Matching Bubble-Craps.com Design */
 
@@ -739,7 +739,7 @@ $current_user = wp_get_current_user();
         min-width: 100%;
     }
 }
-
+</style>
 
 <script>
 // MINIMAL BCTracker for testing
